@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: src/github.com/nats-io/nats-server
-          ref: ${{ github.event.inputs.target || 'main' }}
+          ref: ${{ inputs.target || 'main' }}
 
       - uses: ./src/github.com/nats-io/nats-server/.github/actions/nightly-release
         with:
