@@ -1,9 +1,10 @@
 name: "NATS Server Nightly: MAIN"
 on:
   workflow_dispatch:
+    inputs:
       target:
         description: 'Override image branch (optional)'
-        type: branch
+        type: string
         required: false
 
   schedule:
@@ -17,7 +18,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: src/github.com/nats-io/nats-server
-          ref: ${{ inputs.target || 'main' }}
+          ref: ${{ github.event.inputs.target || 'main' }}
 
       - uses: ./src/github.com/nats-io/nats-server/.github/actions/nightly-release
         with:
