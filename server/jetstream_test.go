@@ -20498,3 +20498,89 @@ func TestJetStreamChangeMaxMessagesPerSubject(t *testing.T) {
 
 	require_NoError(t, expectMsgs(3))
 }
+
+func TestJetStreamMultipleNonOverlappingFilteredConsumersWithAckAll(t *testing.T) {
+	s := RunBasicJetStreamServer(t)
+	defer s.Shutdown()
+
+	nc, js := jsClientConnect(t, s)
+	defer nc.Close()
+
+	_, err := js.AddStream(&nats.StreamConfig{
+		Name:      "TEST",
+		Subjects:  []string{"test.>"},
+		Storage:   nats.FileStorage,
+		Retention: nats.InterestPolicy,
+		MaxAge:    time.Hour * 24,
+	})
+	require_NoError(t, err)
+
+	for i := 0; i < 10; i++ {
+		_, err := js.AddConsumer(
+			"TEST",
+			&nats.ConsumerConfig{
+				Durable:           fmt.Sprintf("consumer_%d", i),
+				AckPolicy:         nats.AckAllPolicy,
+				DeliverPolicy:     nats.DeliverAllPolicy,
+				FilterSubject:     fmt.Sprintf("test.%d", i),
+				AckWait:           time.Second * 30,
+				InactiveThreshold: time.Hour * 24,
+			},
+		)
+		require_NoError(t, err)
+	}
+
+	for i := 0; i < 200; i++ {
+		_, err := js.Publish(fmt.Sprintf("test.%d", i%10), []byte(fmt.Sprintf("%d", i)))
+		require_NoError(t, err)
+	}
+
+	si, err := js.StreamInfo("TEST")
+	require_NoError(t, err)
+
+	require_Equal(t, si.State.Msgs, 200)
+	require_Equal(t, si.State.Bytes, 7690)
+	require_Equal(t, si.State.Consumers, 10)
+
+	var wg sync.WaitGroup
+	wg.Add(10)
+
+	for i := 0; i < 10; i++ {
+		sub, err := js.PullSubscribe(
+			fmt.Sprintf("test.%d", i),
+			fmt.Sprintf("consumer_%d", i),
+			nats.ManualAck(),
+			nats.Bind("TEST", fmt.Sprintf("consumer_%d", i)),
+		)
+		require_NoError(t, err)
+
+		go func(i int) {
+			defer wg.Done()
+
+			for i := 0; i < 20; i++ {
+				msgs, err := sub.Fetch(1)
+				require_NoError(t, err)
+
+				for _, msg := range msgs {
+					require_NoError(t, msg.AckSync())
+				}
+			}
+
+			ci, err := js.ConsumerInfo("TEST", fmt.Sprintf("consumer_%d", i))
+			require_NoError(t, err)
+
+			require_Equal(t, ci.AckFloor.Consumer, 20)
+			require_Equal(t, ci.Delivered.Consumer, 20)
+		}(i)
+	}
+
+	wg.Wait()
+
+	si, err = js.StreamInfo("TEST")
+	require_NoError(t, err)
+
+	require_Equal(t, si.State.FirstSeq, 201)
+	require_Equal(t, si.State.LastSeq, 200)
+	require_Equal(t, si.State.Msgs, 0)
+	require_Equal(t, si.State.Bytes, 0)
+}
