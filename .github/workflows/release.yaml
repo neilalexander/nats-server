@@ -17,6 +17,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.7.0
