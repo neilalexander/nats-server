@@ -17,6 +17,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.7.0
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0.17.6
+
       - name: Create release
         uses: goreleaser/goreleaser-action@v6
         with:
