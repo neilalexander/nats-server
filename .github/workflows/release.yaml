@@ -20,6 +20,12 @@ jobs:
         with:
           go-version: "stable"
 
+      - name: Check version matches tag
+        env:
+          TRAVIS_TAG: ${{ github.ref_name }}
+        run: |
+          go test -race -v -run=TestVersionMatchesTag ./server -ldflags="-X=github.com/nats-io/nats-server/v2/server.serverVersion=$TRAVIS_TAG" -count=1 -vet=off
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.7.0
 
